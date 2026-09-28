@@ -1,37 +1,60 @@
 # Working on this Quill
 
-This repository is a Cloudmorrow **Quill**: a package that adds data and
-screens to somebody's own cloud. It has no UI code and must never get any —
-Cloudmorrow draws its screens from a fixed kit on every surface.
+This repository is a Cloudmorrow **Quill**: a package that adds data, screens
+and what can be done with them to somebody's own cloud. It is TOML and
+Python and nothing else: `quill.toml` declares everything the Quill is and
+does, and `quill.py`, once it needs code, holds what its views, actions,
+hooks, jobs, webhooks, APIs and machine handlers run. Cloudmorrow draws every screen, on
+the phone, the web app and the terminal — there is no HTML, CSS or
+JavaScript here, and there must never be.
+
+The skills in `.claude/skills/` cover each part in depth: **quill-screens**
+(kit screens and views), **quill-actions**, **quill-data**,
+**quill-automation** (hooks, jobs, webhooks, APIs, fetch, secrets),
+**quill-machine**, **quill-testing** and **quill-publish**. Use them.
 
 When asked to change or extend it:
 
-1. Read `quill.toml` and `datamodels/`, and the reference below.
-2. Make the change in the manifest (and datamodel files). Prefer extending a
-   foundational datamodel over introducing a new one.
-3. Run `cm quill check` and fix everything it says, until it passes. It also
-   prints what each screen will look like; read that.
-4. If the person has a server, run `cm quill dev` to install it there and ask
-   them to look at it on their phone or in `cm`.
-5. Keep README.md's "What it adds" table true.
+1. Read `quill.toml`, `quill.py`, `datamodels/` and the reference below.
+2. Declare first: a kit screen, a datamodel field, a declarative job or
+   webhook needs no code. Prefer extending a foundational datamodel over
+   introducing a new one.
+3. Then Python, for what cannot be declared: every handler is named in
+   `quill.toml` and registered in `quill.py` with a decorator.
+4. Write or change a test in `tests/` for it (the quill-testing skill).
+5. Run `cm quill check`, then `cm quill test`, then `cm quill test --sandbox`,
+   and fix everything they say until they pass. `cm quill preview <view>`
+   draws a view as text; read it.
+6. For the person to look at it: `cm quill dev --local` (a throwaway server
+   on this machine), or `cm quill dev` (their own server).
+7. Keep README.md's "What it adds" table true.
+
+The first time, `uv sync` makes `.venv` with Cloudmorrow and pytest in it.
 
 # Writing a Quill
 
 A Quill is a Cloudmorrow software package: one folder (one repository) with a
-`quill.toml` at its root. It declares data and screens; the core does the rest.
-The same Quill is drawn on the phone, the full web app and the terminal, is a
-`cm <quill>` command, and is tools for an assistant. You never write UI code.
+`quill.toml` at its root, and a `quill.py` when it has code. The manifest
+declares data, screens and what can be done; the Python does what cannot be
+declared, in a sandbox, through the same gate as everybody. The same Quill
+is drawn on the phone, the full web app and the terminal, is a `cm <quill>`
+command, and is tools for an assistant. You never write UI code: screens
+are kit elements, or views built from primitives every surface draws.
 
 ## The loop
 
 1. `cm quill check` — validate the manifest against the datamodels, and see a
    text preview of each screen. Fix what it says; it says it plainly.
-2. `cm quill dev` — install this folder on your own server as a development
-   Quill. Every surface has it at once. Run it again after a change.
-3. Tag a release (`v1.0.0`) and open a pull request on
+2. `cm quill test` — `tests/` with pytest, against the real record store and
+   gate (`cloudmorrow.quill.testing.Harness`); `--sandbox` runs `quill.py` in
+   the sandbox, as a server does.
+3. `cm quill preview <view>` draws a view as text; `cm quill dev --local` is a
+   throwaway server on this machine, reinstalled as you save; `cm quill dev`
+   installs this folder on your own server as a development Quill.
+4. Tag a release (`v1.0.0`) and open a pull request on
    `Cloudmorrow/quill-catalog` adding the Quill to `catalog.toml`.
 
-Over MCP an administrator's assistant has the same loop: `quill_schema`,
+Over MCP an administrator's assistant has the first loop: `quill_schema`,
 `quill_check`, `quill_dev_install`.
 
 ## quill.toml
@@ -63,7 +86,7 @@ why = "to show who looks after each plant"
 
 [[screens]]                        # one tab per screen, on every surface
 id = "plants"
-kit = "list"                       # list, board, detail, form, calendar (thread, grid, editor: next)
+kit = "list"                       # list, board, detail, form, calendar, grid, editor, thread
 label = "Plants"
 model = "plants.plant"
 title = "name"
@@ -86,29 +109,193 @@ records = [{ name = "{owner}'s first plant" }]
 # or: file = "datasets/plants.csv"  (CSV with a header row, or TOML [[records]])
 ```
 
-Code, when declaring is not enough (validated and listed today; run by the
-core in the next release):
+## Code: quill.py
+
+When declaring is not enough, the manifest names Python functions, and
+`quill.py` (or a `quill/` package) has them, each registered with a
+decorator from the SDK, `cloudmorrow.quill`. The server runs them in a
+sandbox — CPython compiled to WebAssembly: no files, no sockets, no
+processes, only the standard library and the SDK — and every record they
+touch goes through the gate, as the principal the table says:
+
+| declared as | written as | runs as | returns |
+| --- | --- | --- | --- |
+| `[[screens]] view = "garage"` | `@view("garage") def garage(ctx)` | the person looking | a tree of primitives |
+| `[[actions]]` | `@action("log_service") def log_service(ctx, [record,] **fields)` | the person pressing | effects |
+| `[[hooks]] on, when, handler` | `@hook def h(ctx, change)` | whoever made the change | nothing |
+| `[[jobs]] action = "call", handler, every` | `@job def j(ctx)` | the installing administrator | nothing |
+| `[[webhooks]] handler` | `@webhook def w(ctx, request)` | the installing administrator | `respond(...)` or a dict |
+| `[[apis]] handler, prefix` | `@api def a(ctx, request)` | the installing administrator | `respond(...)` or a dict |
+| `[[machine]]` | `@machine def m(ctx)` | the machine's owner, on their machine | JSON |
 
 ```toml
-[[services]]                       # a program the core keeps running
-id = "sync"
-command = ["python", "services/sync.py"]
-always = true
+[quill]
+code = "quill.py"                  # needed as soon as anything names a handler
 
-[[webhooks]]                       # POST /hooks/<quill>/<path>
+[[screens]]
+id = "garage"
+label = "Garage"
+view = "garage"                    # instead of kit = …
+model = "vehicle"                  # optional: circles fit it by this
+
+[[actions]]
+id = "log-service"                 # its button, `cm fleet log-service`, and an assistant's tool
+label = "Log a service"
+on = "vehicle"                     # optional: done to one record; the handler gets it first
+confirm = "Log it?"                # optional; tone = "primary" | "danger"; assistant = false
+[actions.fields]                   # its form, checked before the code runs
+date = { kind = "date", required = true }
+km = "int"
+
+[[hooks]]
+on = "fleet.visit"
+when = ["created"]                 # created, changed, deleted
+fields = ["km"]                    # optional: for changed, only these
+handler = "visit_logged"
+
+[[fetch]]                          # https hosts ctx.fetch may reach
+host = "api.example.com"
+why = "…"
+
+[[secrets]]                        # keys ctx.secret may read from the person's vault
+key = "TRACKER_KEY"
+why = "…"
+
+[[machine]]                        # runs on a person's machine, once they switch it on there
+id = "import"
+why = "…"
+every = "15m"
+[machine.needs]
+folders = [{ name = "exports", access = "read" }]
+```
+
+```python
+from cloudmorrow.quill import action, hook, view, ui, toast, error, open, go, confirm, respond
+
+@view("garage")
+def garage(ctx):
+    vans = ctx.records.list("vehicle")
+    return ui.stack(
+        ui.row(ui.stat("Vans", len(vans))),
+        ui.table(vans, columns=["name", ("Odometer", "fleet.odometer")], actions=["log-service"]),
+        ui.button("Add a van", action="add-van", tone="primary"),
+    )
+
+@action("log_service")
+def log_service(ctx, vehicle, date, km):
+    ctx.records.create("fleet.visit", vehicle=vehicle.id, date=date, km=km)
+    return toast(f"Logged {vehicle['name']} at {km} km")
+```
+
+`ctx`: `ctx.user` (`.username`, `.name`, `.admin`, `.circles`), `ctx.params`
+(a view's; `.record` when opened on one), `ctx.records` (`list(model, q=,
+**where)`, `get`, `create(model, fields=None, **values)`, `patch(model, id,
+fields)`, `move`, `delete` — each a `Record`: fields by `record["name"]`,
+envelope as `.id`, `.rev`, `.model`), `ctx.fetch(url, method=, headers=,
+json=)`, `ctx.secret(key)`, `ctx.now()`, `ctx.log(...)`, and on a machine
+`ctx.folder(name)` and `ctx.run([...])`. A refusal raises `Refused`,
+`NotFound`, `Invalid` or `Conflict`. `print` goes to the Quill's log
+(`cm quill logs <quill> code`).
+
+Primitives (`ui.`): `stack`, `row`, `columns`, `tabs`, `text(style=)`,
+`markdown`, `image`, `badge`, `stat`, `empty`, `divider`, `field(record,
+name, edit=)`, `form(action)`, `button(label, action= | open= | go=)`,
+`menu`, `table(records, columns=, actions=)`, `cards(records, title=, …)`,
+`lanes(records, field=, title=)`, `month(records, date=, title=)`. Every
+button runs a declared action, opens a record, or goes to a declared screen.
+
+Effects: `toast(text)`, `open(record)`, `go(screen, **params)`,
+`confirm(text, then=action, **fields)`, `error(text)`; an API or webhook
+returns `respond(json=… | text=…, status=)`.
+
+Tests: `from cloudmorrow.quill.testing import Harness`; `q = Harness(".")`;
+`q.seed(model, **fields)`, `q.act(action, record, **fields)` (→ `.ok`,
+`.toast`, `.error`, `.refused`), `q.view(screen).text()`,
+`q.as_user(name, circles=[...])`, `q.run_job`, `q.webhook`, `q.api`,
+`q.machine(id, folders=)`, `q.fetch.add(url, json=)`, `q.secret(key, value)`.
+
+## Services: a program of its own
+
+The last resort, for what the sandbox cannot do: hold a connection open,
+run all the time, use a package with C in it. The server runs it outside
+the sandbox, as the administrator who installed the Quill, and it reaches
+only what the Quill declared:
+
+```toml
+[[services]]                       # a program the core starts and keeps running
+id = "sync"
+command = ["python", "services/sync.py"]   # "python" is the server's own Python
+always = true                      # started again if it exits (with backoff)
+
+[[jobs]]                           # or: run a service now and then, never twice at once
+id = "nightly"
+action = "run"
+service = "sync"                   # a service a job names is only started by the job
+every = "1d"
+
+[[webhooks]]                       # POST /hooks/<quill>/<path>, with the webhook's secret
 id = "inbound"
 path = "inbound"
 model = "plants.plant"             # the JSON body becomes a record…
-# forward = "sync"                 # …or goes to a service
+map = { name = "$.plant.name" }    # field = a path into the body: $.a.b[0].c
+# forward = "sync"                 # …or the request goes to a service instead
+# signature = "X-Hub-Signature-256"  # also accept a GitHub-style HMAC of the body
 
-[[apis]]                           # /api/q/<quill>/… proxied to a service
+[[apis]]                           # /api/q/<quill>/… proxied to a service (or handler = …)
 id = "public"
 service = "sync"
+# prefix = "v1"                    # only paths under /api/q/<quill>/v1/
 ```
 
-A service gets `CLOUDMORROW_URL` and `CLOUDMORROW_TOKEN` and uses the record
-API like any client: `GET/POST /api/records/<model>`,
-`GET/PATCH/DELETE /api/records/<model>/<id>`, `POST …/<id>/move`.
+A service is started in the Quill's folder with only these in its
+environment — nothing of the server's:
+
+| variable | what |
+| --- | --- |
+| `CLOUDMORROW_URL` | the server, on loopback |
+| `CLOUDMORROW_TOKEN` | the Quill's own token: the record API, its declared datamodels only |
+| `CLOUDMORROW_QUILL`, `CLOUDMORROW_SERVICE` | its id, and which service this is |
+| `PORT` | a free loopback port to serve on, for an API or a forwarded webhook |
+| `HOME` | a folder of its own that survives updates |
+| `PATH`, `LANG`, `PYTHONUNBUFFERED` | so programs are found and output is logged as it comes |
+
+It uses the record API like any client: `GET/POST /api/records/<model>`,
+`GET/PATCH/DELETE /api/records/<model>/<id>`, `POST …/<id>/move`. An API
+request arrives at `/<path>` with `X-Cloudmorrow-User: <who is asking>` (never
+their token); a forwarded webhook arrives as `POST /hooks/<path>` with
+`X-Cloudmorrow-Webhook: <id>`, its secret already checked. What it prints goes
+to its log (`cm quill logs <quill> <service>`). Only the standard library is
+certain to be there. A whole service, `services/sync.py`:
+
+```python
+import json, os, urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+URL, TOKEN = os.environ["CLOUDMORROW_URL"], os.environ["CLOUDMORROW_TOKEN"]
+
+def records(method, path, body=None):
+    request = urllib.request.Request(
+        URL + "/api/records/" + path, method=method,
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=10) as answer:
+        return json.loads(answer.read() or b"null")
+
+class Api(BaseHTTPRequestHandler):
+    def do_GET(self):                           # GET /api/q/plants/count
+        who = self.headers["X-Cloudmorrow-User"]
+        body = json.dumps({"asked_by": who, "plants": len(records("GET", "plants.plant"))})
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body.encode())
+
+print("up", flush=True)                         # into its log
+ThreadingHTTPServer(("127.0.0.1", int(os.environ["PORT"])), Api).serve_forever()
+```
+
+The records it reads and writes are the installing administrator's; a service
+per person is not there yet.
 
 ## Datamodels you introduce
 
@@ -142,24 +329,46 @@ A datetime without a zone is the wall clock, kept as typed; a bare date is a
 whole day. Filter a list with `?field=value`, or a range with `__lt`,
 `__lte`, `__gt`, `__gte` on an indexed field.
 `stamp` sets a datetime when another field takes a value and clears it when it
-leaves.
+leaves. `secret = true` on a string or text field keeps it out of every listing
+and has every surface draw it hidden until asked for.
 
 ## The kit
 
 | kit | needs | draws |
 | --- | --- | --- |
-| list | model, title; optional subtitle, tick (bool) | rows, a circle per row if tick |
+| list | model, title; optional subtitle, tick (bool), fields (the sheet's), group and subgroup (link, enum or indexed string) | rows, a circle per row if tick; chips (phone, web) or a list and buttons (terminal) to pick the group and subgroup |
 | board | model, lane (enum, in ordered_within), title; optional group (link: chips), body (markdown), done (a lane value) | lanes; cards dragged between them |
 | detail / form | model; optional fields = [...] | one record's fields, editable |
 | calendar | model, starts, ends (indexed datetime/date), space (a link to a space datamodel); optional all_day (bool), colour (a field of the space), subtitle | every space's things at once: a month, a week, the day's list; the spaces and their people |
+| editor | model, title, body (markdown); optional path (a string like folder/sub/title: the folders) | a tree of folders and records beside a page of Markdown; pictures where the backend keeps attachments |
+| grid | a model with bytes beside its fields (the foundational `file`); group (link: the places, picked first), folder (string), kind (an enum with "folder"); optional size, modified, mime, group_subtitle and group_open (fields of the group's model) | the groups, then folders and tiles with pictures; put in, get, new folder, rename, move, delete |
+| thread | model (in a space), space (its link to the space), body; optional about (a field of the space), made_as | the spaces with unread counts, then a conversation: newest at the bottom, grouped by author and day, a box to write in |
+
+A thread's `made_as` says what fields a space gets for how it is made — by
+scope, or `direct`: a shared space found-or-made between you and the person
+you pick, named for them (its fields must be indexed):
+
+```toml
+[screens.made_as]
+public = { kind = "public" }
+shared = { kind = "private" }
+direct = { kind = "direct" }
+```
+
+On the command line a thread is `cm <quill> list` (the spaces, with unread),
+`show <space>` and `say <space> "text"`.
 
 Every screen opens a record sheet when a row or card is chosen: every field,
-with the widget for its kind, editable, with delete. No other UI exists, on
+with the widget for its kind, editable, with delete. An editor opens its page
+instead. No other UI exists, on
 purpose: what the kit cannot say, the kit grows to say, for every Quill at once.
 
 ## Rules
 
-- Never ship UI code, HTML, or CSS. Use the kit.
+- Never ship UI code, HTML, CSS or JavaScript. Use the kit, or a view of primitives.
+- Declare first; Python for what cannot be declared; a service last.
+- Every handler is named in the manifest, and every button in a view runs a
+  declared action or goes to a declared screen.
 - Never invent a second kind of something that is already a datamodel; extend it.
 - Extension fields cannot be required.
 - Everything you read or write that you did not introduce is in `[uses]`,

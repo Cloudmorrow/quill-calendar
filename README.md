@@ -28,13 +28,22 @@ day it is on.
 | Screens | one calendar: a month and the day's list on the phone, a week and a month on the web app, a month and the day in the terminal, `cm calendar list --from --to` and `add`, and to your assistant |
 | Jobs | none |
 | Datasets | `yours`: a personal calendar for each person, named after them; `everybody`: one public calendar for the server |
+| Actions | **Copy to next week** on an event — on its sheet, `cm calendar copy-to-next-week`, and to your assistant |
 | Services, webhooks, APIs | none |
 
-It contains no code: everything above is declared in [`quill.toml`](quill.toml).
+Its code is [`quill.py`](quill.py): the one action, run in the sandbox as whoever presses it. Everything else is declared in [`quill.toml`](quill.toml).
 
 ## Working on it
 
-See [CLAUDE.md](CLAUDE.md). In short: `cm quill check`, then `cm quill dev`.
+See [CLAUDE.md](CLAUDE.md) and the skills in `.claude/skills/`. In short:
+
+```
+uv sync                  # .venv with Cloudmorrow and pytest
+cm quill check           # the manifest, as a server would install it
+cm quill test            # tests/, against the real record store and gate
+cm quill test --sandbox  # the same, with the code in the sandbox
+cm quill dev --local     # a throwaway server here, reinstalled as you save
+```
 
 ## Licence
 
