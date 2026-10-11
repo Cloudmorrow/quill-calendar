@@ -12,17 +12,29 @@ description: Release a Quill and put it in the Quill Catalog — versions, tags,
 4. Commit, tag and push: `git tag v1.2.0 && git push --tags`. The release
    workflow checks the tag matches quill.toml, tests again in the sandbox,
    and publishes the release.
-5. Open a pull request on Cloudmorrow/quill-catalog adding it to catalog.toml
-   (and, if you like, list it at https://cloudmorrow.com/publish so people
-   can find it while the pull request waits):
+   With no machine to push a tag from, run the **release** workflow from
+   the Actions tab instead: it checks and tests main, tags it with
+   quill.toml's version, and publishes the release.
+5. The first release of a Quill of your own: open a pull request on
+   Cloudmorrow/quill-catalog adding one block to catalog.toml (its pull
+   request template carries it):
    ```toml
    [[quills]]
    id = "fleet"
+   name = "Fleet"
+   summary = "The vans, when each was last serviced, and who drives it."
    repo = "https://github.com/you/quill-fleet"
    ref = "v1.2.0"
    category = "business"
+   publisher = "you"
    ```
-   An update is the same pull request with a new `ref`.
+   Every release after that needs no pull request by hand: within fifteen
+   minutes the catalog's **releases** workflow opens one moving your `ref`
+   to it, with the check result and the install sheet in its body, and
+   Cloudmorrow merges it or says why not. Opening it yourself is fine too;
+   the result is the same. Until it is merged, servers install the release
+   the catalog pins. A Quill in github.com/Cloudmorrow/quill-* goes straight
+   in: the workflow commits its release to the catalog.
 
 Start a Quill with GitHub's "Use this template" on Cloudmorrow/quill-template
 (not a fork), or `cm quill new <id>`. The SDK is a dependency
