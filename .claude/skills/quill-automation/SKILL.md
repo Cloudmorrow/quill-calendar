@@ -21,7 +21,7 @@ handler = "visit_logged"
 ```python
 @hook
 def visit_logged(ctx, change):
-    visit = change.record               # change.action, change.before (old fields), change.changed
+    visit = change.record  # change.action, change.before (old fields), change.changed
     van = ctx.records.get("vehicle", visit["vehicle"])
     ctx.records.patch("vehicle", van.id, {"fleet.odometer": visit["km"]})
 ```
@@ -43,6 +43,24 @@ every = "1d"                # 15m, 1h, 1d, 2w
 A `call` job runs as the administrator who installed the Quill, never twice at once.
 For plain expiry use the declarative `action = "expire"` instead — no code.
 
+## A program the server does not have
+
+A `[[services]]` program that needs ffmpeg, or any other binary, names it and
+the install brings it — nobody runs `apt` on the server, and the server
+cannot either:
+
+```toml
+[requires]
+runtimes = ["ffmpeg"]       # ids from the catalog's [runtimes]; first on the service's PATH
+```
+
+The install sheet says *Adds to this server: ffmpeg 7.1.5 · 119 MB* before
+the yes; removing the last Quill that needs it asks whether it goes too. A
+runtime the catalog does not list is a pull request to Cloudmorrow/quill-catalog
+with a build per OS and architecture and its SHA-256. In the service, call
+the program by name (`shutil.which("ffmpeg")` finds it) and still say
+something sensible on a clip when it is missing.
+
 ## Webhooks: something outside tells you something
 
 ```toml
@@ -54,9 +72,9 @@ signature = "Stripe-Signature"   # optional: an HMAC of the body instead of the 
 
 ```python
 @webhook
-def stripe_paid(ctx, request):          # request.json(), .text, .headers, .query
+def stripe_paid(ctx, request):  # request.json(), .text, .headers, .query
     ...
-    return respond(json={"ok": True})   # or nothing: 204
+    return respond(json={"ok": True})  # or nothing: 204
 ```
 
 It is at `POST /hooks/<quill>/<path>` with the webhook's secret, which an
@@ -72,8 +90,8 @@ handler = "summary"         # GET/POST/… /api/q/<quill>/<path>, for anybody si
 
 ```python
 @api
-def summary(ctx, request):              # request.method, .path, .user (who asked)
-    return {"vans": len(ctx.records.list("vehicle"))}   # a dict is sent as JSON
+def summary(ctx, request):  # request.method, .path, .user (who asked)
+    return {"vans": len(ctx.records.list("vehicle"))}  # a dict is sent as JSON
 ```
 
 ## The internet, and secrets
@@ -89,8 +107,9 @@ why = "to sign in to the tracker"
 ```
 
 ```python
-answer = ctx.fetch("https://api.example-tracker.com/vans",
-                   headers={"Authorization": "Bearer " + ctx.secret("TRACKER_KEY")})
+answer = ctx.fetch(
+    "https://api.example-tracker.com/vans", headers={"Authorization": "Bearer " + ctx.secret("TRACKER_KEY")}
+)
 if answer.ok:
     data = answer.json()
 ```

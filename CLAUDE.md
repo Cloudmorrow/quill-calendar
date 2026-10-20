@@ -55,8 +55,14 @@ are kit elements, or views built from primitives every surface draws.
    `Cloudmorrow/quill-catalog` adding the Quill to `catalog.toml`; after
    that the catalog follows your releases by itself.
 
-Over MCP an administrator's assistant has the first loop: `quill_schema`,
-`quill_check`, `quill_dev_install`.
+Over MCP an assistant has the first loop: `quill_schema`, `quill_check`,
+`quill_dev_install`. An administrator's assistant builds the server's
+Quill; anybody else's builds one of their own — on their shelf alone, over
+their own data, run as them — which may add no fields to shared datamodels,
+run no services, and keep personal records only (its own datamodels are
+named after them on the server; the code uses the names written here).
+`quill_share` offers it to people; `quill_request` asks an administrator for
+a Quill, or for one of theirs to be promoted for everyone.
 
 ## quill.toml
 
@@ -67,7 +73,7 @@ name = "Plants"
 version = "1.0.0"                  # major.minor.patch
 summary = "Your plants, and when you last watered each."
 category = "home"                  # home, personal, business, developer, …
-icon = "plants"
+icon = "plants"                    # from the icon library (cloudmorrow.com/resources/icons), or the app's own
 publisher = "you"
 license = "MIT"
 features = ["One line per thing it does, for the catalog"]
@@ -105,7 +111,8 @@ every = "1d"
 [[datasets]]                       # records that come with the Quill
 id = "first-plant"
 model = "plants.plant"
-seed = "per-owner"                 # once for each person who has none
+seed = "per-owner"                 # once for each person who has none; "once" for the
+                                   # server; "per-space" in every space with none
 records = [{ name = "{owner}'s first plant" }]
 # or: file = "datasets/plants.csv"  (CSV with a header row, or TOML [[records]])
 ```
@@ -173,6 +180,7 @@ folders = [{ name = "exports", access = "read" }]
 ```python
 from cloudmorrow.quill import action, hook, view, ui, toast, error, open, go, confirm, respond
 
+
 @view("garage")
 def garage(ctx):
     vans = ctx.records.list("vehicle")
@@ -181,6 +189,7 @@ def garage(ctx):
         ui.table(vans, columns=["name", ("Odometer", "fleet.odometer")], actions=["log-service"]),
         ui.button("Add a van", action="add-van", tone="primary"),
     )
+
 
 @action("log_service")
 def log_service(ctx, vehicle, date, km):
@@ -246,7 +255,18 @@ map = { name = "$.plant.name" }    # field = a path into the body: $.a.b[0].c
 id = "public"
 service = "sync"
 # prefix = "v1"                    # only paths under /api/q/<quill>/v1/
+
+[requires]                         # a program a service needs that the server may not have
+runtimes = ["ffmpeg"]              # an id from the catalog's [runtimes]; the install fetches
+                                   # a checked static build and puts it first on the services' PATH
 ```
+
+A runtime is for a service only (a Quill without `[[services]]` is refused
+one), is named on the install sheet with its size before the yes, and is
+offered for removal with the last Quill that needs it. Never tell anybody to
+`apt install` something: name it in `[requires]` instead, and if the catalog
+has no entry for it yet, that is a pull request to Cloudmorrow/quill-catalog
+adding `[runtimes.<id>]` with a build per OS and architecture and its SHA-256.
 
 A service is started in the Quill's folder with only these in its
 environment — nothing of the server's:
@@ -258,7 +278,7 @@ environment — nothing of the server's:
 | `CLOUDMORROW_QUILL`, `CLOUDMORROW_SERVICE` | its id, and which service this is |
 | `PORT` | a free loopback port to serve on, for an API or a forwarded webhook |
 | `HOME` | a folder of its own that survives updates |
-| `PATH`, `LANG`, `PYTHONUNBUFFERED` | so programs are found and output is logged as it comes |
+| `PATH`, `LANG`, `PYTHONUNBUFFERED` | so programs are found (its runtimes first) and output is logged as it comes |
 
 It uses the record API like any client: `GET/POST /api/records/<model>`,
 `GET/PATCH/DELETE /api/records/<model>/<id>`, `POST …/<id>/move`. An API
@@ -274,16 +294,20 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 URL, TOKEN = os.environ["CLOUDMORROW_URL"], os.environ["CLOUDMORROW_TOKEN"]
 
+
 def records(method, path, body=None):
     request = urllib.request.Request(
-        URL + "/api/records/" + path, method=method,
+        URL + "/api/records/" + path,
+        method=method,
         data=json.dumps(body).encode() if body is not None else None,
-        headers={"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"})
+        headers={"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"},
+    )
     with urllib.request.urlopen(request, timeout=10) as answer:
         return json.loads(answer.read() or b"null")
 
+
 class Api(BaseHTTPRequestHandler):
-    def do_GET(self):                           # GET /api/q/plants/count
+    def do_GET(self):  # GET /api/q/plants/count
         who = self.headers["X-Cloudmorrow-User"]
         body = json.dumps({"asked_by": who, "plants": len(records("GET", "plants.plant"))})
         self.send_response(200)
@@ -291,7 +315,8 @@ class Api(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body.encode())
 
-print("up", flush=True)                         # into its log
+
+print("up", flush=True)  # into its log
 ThreadingHTTPServer(("127.0.0.1", int(os.environ["PORT"])), Api).serve_forever()
 ```
 
@@ -300,7 +325,10 @@ per person is not there yet.
 
 ## Datamodels you introduce
 
-One TOML file each, in `datamodels/`, with an id under your Quill's:
+One TOML file each, in `datamodels/`, with an id under your Quill's. The
+full contract for data — field kinds, versions, extension fields, spaces,
+who may see and change what — is `docs/DATAMODELS.md` in the Cloudmorrow
+repository; the foundational datamodels are at cloudmorrow.com/datamodels.
 
 ```toml
 [datamodel]
@@ -338,12 +366,12 @@ and has every surface draw it hidden until asked for.
 | kit | needs | draws |
 | --- | --- | --- |
 | list | model, title; optional subtitle, tick (bool), fields (the sheet's), group and subgroup (link, enum or indexed string) | rows, a circle per row if tick; chips (phone, web) or a list and buttons (terminal) to pick the group and subgroup |
-| board | model, lane (enum, in ordered_within), title; optional group (link: chips), body (markdown), done (a lane value) | lanes; cards dragged between them |
+| board | model, lane (in ordered_within: an enum, or a link to the records that are the lanes — in their order, and on a board with a group only those linking to it), title; optional group (link: chips), subtitle (a field, or a list of them, under a card's title), body (markdown), done (a lane value; for record lanes what the lane has: `{ outcome = "won" }`) | lanes; cards dragged between them |
 | detail / form | model; optional fields = [...] | one record's fields, editable |
 | calendar | model, starts, ends (indexed datetime/date), space (a link to a space datamodel); optional all_day (bool), colour (a field of the space), subtitle | every space's things at once: a month, a week, the day's list; the spaces and their people |
 | editor | model, title, body (markdown); optional path (a string like folder/sub/title: the folders) | a tree of folders and records beside a page of Markdown; pictures where the backend keeps attachments |
-| grid | a model with bytes beside its fields (the foundational `file`); group (link: the places, picked first), folder (string), kind (an enum with "folder"); optional size, modified, mime, group_subtitle and group_open (fields of the group's model) | the groups, then folders and tiles with pictures; put in, get, new folder, rename, move, delete |
-| thread | model (in a space), space (its link to the space), body; optional about (a field of the space), made_as | the spaces with unread counts, then a conversation: newest at the bottom, grouped by author and day, a box to write in |
+| grid | a model with bytes beside its fields (the foundational `file`); group (link: the places, picked first), folder (string), kind (an enum with "folder"); optional size, modified, mime, group_subtitle, group_open and group_writes (fields of the group's model; group_open and group_writes are bools: false and the group is listed but not opened, or opened with nothing that writes) | the groups, then folders and tiles with pictures; put in, get, new folder, rename, move, delete |
+| thread | model (in a space), space (its link to the space), body; optional about (a field of the space), made_as; a team's: reply_to (a link of the model to itself: a reply, in a thread under its parent), pinned (a bool: kept at the top; `managed` in the datamodel lets the space's manager pin), reactions (a datamodel of the Quill's with a link to the model, an `emoji` string, authored: one per person per emoji per line, toggled), mentions = true (@name lights up and tells that person) | the spaces with unread counts, then a conversation: newest at the bottom, grouped by author and day, a box to write in; threads beside it, reactions under each line, pinned lines in the header |
 
 A thread's `made_as` says what fields a space gets for how it is made — by
 scope, or `direct`: a shared space found-or-made between you and the person
@@ -357,7 +385,10 @@ direct = { kind = "direct" }
 ```
 
 On the command line a thread is `cm <quill> list` (the spaces, with unread),
-`show <space>` and `say <space> "text"`.
+`show <space>` and `say <space> "text"`; with the team's bindings also
+`reply <space> <line> "text"`, `react <space> <line> 👍`, `pin <space> <line>`
+and `show <space> --thread <line>`, a line named by the start of its id as
+`show` prints it in the margin.
 
 Every screen opens a record sheet when a row or card is chosen: every field,
 with the widget for its kind, editable, with delete. An editor opens its page
@@ -375,3 +406,5 @@ purpose: what the kit cannot say, the kit grows to say, for every Quill at once.
 - Everything you read or write that you did not introduce is in `[uses]`,
   `[[extends]]` or `[[grants]]`.
 - Uninstalling a Quill never deletes records.
+- A Quill of one person's own: no `[[extends]]`, no `[[services]]`, and
+  `scopes = ["personal"]` on what it introduces, which is never a space.
