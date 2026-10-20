@@ -17,9 +17,11 @@ surface. Reach for a **view** only when no kit element says it.
 | the person needs | use |
 | --- | --- |
 | a list to tick off, grouped by something | `kit = "list"` (`tick`, `group`, `subgroup`) |
-| cards moved between columns | `kit = "board"` (`lane`, `group`) |
+| cards moved between columns | `kit = "board"` (`lane`, `group`, `subtitle`) |
+| columns people add, rename and reorder (a pipeline's stages) | `kit = "board"` with `lane` a **link** to the records that are the columns |
 | things on days | `kit = "calendar"` |
 | a conversation | `kit = "thread"` |
+| a team's conversation: threads, @mentions, reactions, pinned lines | `kit = "thread"` with `reply_to`, `mentions`, `reactions`, `pinned` |
 | pages of Markdown in folders | `kit = "editor"` |
 | files | `kit = "grid"` |
 | a summary, a dashboard, numbers, a mix of the above, a record's own page | a **view** |
@@ -43,14 +45,14 @@ model = "vehicle"       # what it is about: someone whose circles hide vehicles 
 ```python
 from cloudmorrow.quill import ui, view
 
+
 @view("garage")
 def garage(ctx):
     vans = ctx.records.list("vehicle")
     due = [v for v in vans if (v.get("fleet.odometer") or 0) > 30000]
     return ui.stack(
         ui.row(ui.stat("Vans", len(vans)), ui.stat("Due a service", len(due), tone="warn")),
-        ui.table(vans, columns=["name", ("Odometer", "fleet.odometer")],
-                 actions=["log-service"], empty="No vans yet."),
+        ui.table(vans, columns=["name", ("Odometer", "fleet.odometer")], actions=["log-service"], empty="No vans yet."),
         ui.button("Add a van", action="add-van", tone="primary"),
     )
 ```
