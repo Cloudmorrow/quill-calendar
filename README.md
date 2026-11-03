@@ -10,6 +10,9 @@ the whole server shares.
   invitation to accept: they are added, they are told, and they can leave.
 - **Everybody's.** One calendar the whole server sees and writes in, and
   nobody can leave.
+- **Subscribed.** A calendar somebody else publishes — the club's fixtures,
+  the bins, the public holidays — read into a calendar of your own from its
+  address, every hour, and read-only.
 
 Every calendar you can see is drawn at once, each event in the colour of
 the calendar it is on — a calendar you have to switch between is one that
@@ -38,6 +41,30 @@ the start on a record sheet keeps how long it is. Every calendar you can
 see is drawn at once, each event in its calendar's colour (cyan, violet,
 green, amber or rose). An event does not notify anybody: a house calendar
 that pinged everybody for every appointment is one nobody reads.
+
+**A calendar from elsewhere** is subscribed to by its address: the `.ics`
+link Google Calendar, Outlook, a club's website and the rest hand out (a
+`webcal://` one is fine too). *Subscribe to a calendar* is under the
+calendar's title on the web and the phone, `ctrl+e` in the terminal, `cm
+calendar subscribe url=…` on the command line, and a tool for your
+assistant; it reads the feed once, makes a calendar of your own named as
+the feed names itself (or as you say), in a colour of its own, and puts
+the feed's events on it. From then on it is read again every hour, as you,
+and *Refresh now* on its sheet reads it sooner. It is listed apart, under
+*Subscribed*, and it is read-only: nothing is put on it from here, and what
+is on it opens on a sheet that says it rather than one that changes it —
+it is theirs to change, and the next refresh would put it back. *Copy to
+next week* on one of its events copies onto your own calendar. The sheet
+of a subscribed calendar says where it is read from (change the address
+and the new feed is read; clear it and the feed's events go, the calendar
+stays), when it was last read, and what went wrong if anything did — then
+what was read before is kept. *Unsubscribe* takes it away, events and all.
+
+What is read: every event a year back and two years on, whole days and
+moments alike, recurring ones at every time they happen (daily, weekly,
+monthly and yearly rules, with their exceptions and moved times), in the
+zone the feed says they are in, shown in yours. Nothing is read that is
+not the feed: no attachments, no attendees, no alarms.
 
 **Looking, and putting something in:**
 
@@ -69,6 +96,9 @@ cm calendar list --from 2026-10-01 --to 2026-10-31
 cm calendar add "Dentist" starts_at=2026-10-01T10:00       # into your own…
 cm calendar add "Dinner" starts_at=2026-10-03T19:00 calendar=House   # …or a shared one
 cm calendar copy-to-next-week <event>
+cm calendar subscribe url=https://example.org/club.ics name="The club"
+cm calendar refresh <calendar>
+cm calendar unsubscribe <calendar>
 ```
 
 ---
@@ -84,14 +114,16 @@ that had the built-in calendar got the Quill at boot, with its calendars
 
 | | |
 | --- | --- |
-| Datamodels | uses the foundational `calendar` (a space: personal, shared or public) and `event` (in a calendar), domain *Calendars* |
-| Screens | one calendar: a month and the day's list on the phone, a week and a month on the web app, a month and the day in the terminal, `cm calendar list --from --to` and `add`, and to your assistant |
-| Jobs | none |
+| Datamodels | uses the foundational `calendar` (a space: personal, shared or public) and `event` (in a calendar), domain *Calendars*; extends `calendar` with `calendar.url` (the feed a subscribed one is read from), `calendar.refreshed` and `calendar.trouble`, and `event` with `calendar.uid` (what the feed calls it) |
+| Screens | one calendar: a month and the day's list on the phone, a week and a month on the web app, a month and the day in the terminal, `cm calendar list --from --to` and `add`, and to your assistant; a subscribed calendar is listed apart and read-only on every one of them |
+| Jobs | `refresh`: every hour, as each person, their subscribed calendars read again |
+| Hooks | the address on a calendar changed: the new feed is read, or, cleared, the feed's events taken off |
 | Datasets | `yours`: a personal calendar for each person, named after them; `everybody`: one public calendar for the server |
-| Actions | **Copy to next week** on an event — on its sheet, `cm calendar copy-to-next-week`, and to your assistant |
+| Actions | **Copy to next week** on an event; **Subscribe to a calendar** (an address, and a name if you like); **Refresh now** and **Unsubscribe** on a subscribed calendar — on the sheets, as `cm calendar …`, and to your assistant |
+| Reaches | any address on the internet, to read the feeds you subscribe to; never a private one |
 | Services, webhooks, APIs | none |
 
-Its code is [`quill.py`](quill.py): the one action, run in the sandbox as whoever presses it. Everything else is declared in [`quill.toml`](quill.toml).
+Its code is [`quill.py`](quill.py): the actions, the hook and the job, run in the sandbox as whoever presses, changes or holds, and a reader of iCalendar (RFC 5545) small enough to live there. Everything else is declared in [`quill.toml`](quill.toml).
 
 ## Working on it
 
