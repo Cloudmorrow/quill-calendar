@@ -91,10 +91,11 @@ model = "contact"
 access = "read"                    # read or write
 why = "to show who looks after each plant"
 
-[[screens]]                        # one tab per screen, on every surface
+[[screens]]                        # the Quill is one tab, on every surface; its screens are the items under it
 id = "plants"
-kit = "list"                       # list, board, detail, form, calendar, grid, editor, thread
+kit = "list"                       # list, board, detail, form, calendar, grid, editor, sheet, thread, timeline
 label = "Plants"
+icon = "plant-pot"                 # the item's own mark, from the library: no two screens look alike
 model = "plants.plant"
 title = "name"
 subtitle = "last_watered"
@@ -131,7 +132,7 @@ touch goes through the gate, as the principal the table says:
 | `[[screens]] view = "garage"` | `@view("garage") def garage(ctx)` | the person looking | a tree of primitives |
 | `[[actions]]` | `@action("log_service") def log_service(ctx, [record,] **fields)` | the person pressing | effects |
 | `[[hooks]] on, when, handler` | `@hook def h(ctx, change)` | whoever made the change | nothing |
-| `[[jobs]] action = "call", handler, every` | `@job def j(ctx)` | the installing administrator | nothing |
+| `[[jobs]] action = "call", handler, every` | `@job def j(ctx)` | the installing administrator — or, with `as = "everybody"`, once as each person, over their own records | nothing |
 | `[[webhooks]] handler` | `@webhook def w(ctx, request)` | the installing administrator | `respond(...)` or a dict |
 | `[[apis]] handler, prefix` | `@api def a(ctx, request)` | the installing administrator | `respond(...)` or a dict |
 | `[[machine]]` | `@machine def m(ctx)` | the machine's owner, on their machine | JSON |
@@ -162,7 +163,7 @@ fields = ["km"]                    # optional: for changed, only these
 handler = "visit_logged"
 
 [[fetch]]                          # https hosts ctx.fetch may reach
-host = "api.example.com"
+host = "api.example.com"           # or *.example.com; or * for any host on the internet (never a private one)
 why = "…"
 
 [[secrets]]                        # keys ctx.secret may read from the person's vault
@@ -205,7 +206,10 @@ def log_service(ctx, vehicle, date, km):
 fields)`, `move`, `delete` — each a `Record`: fields by `record["name"]`,
 envelope as `.id`, `.rev`, `.model`), `ctx.fetch(url, method=, headers=,
 json=)`, `ctx.secret(key)`, `ctx.now()`, `ctx.log(...)`, and on a machine
-`ctx.folder(name)` and `ctx.run([...])` (a program in `needs.run` the machine
+`ctx.records.create(..., scope=, members=)` makes a space, shared with its
+members; `ctx.records.seen(model, id)` is the person having looked in one;
+`ctx.people()` is everybody on the server but them. `ctx.folder(name)` and
+`ctx.run([...])` (a program in `needs.run` the machine
 allows, or one of a runtime in `needs.runtimes`). A refusal raises `Refused`,
 `NotFound`, `Invalid` or `Conflict`. `print` goes to the Quill's log
 (`cm quill logs <quill> code`).
@@ -213,7 +217,11 @@ allows, or one of a runtime in `needs.runtimes`). A refusal raises `Refused`,
 Primitives (`ui.`): `stack`, `row`, `columns`, `tabs`, `text(style=)`,
 `markdown`, `image`, `badge`, `stat`, `empty`, `divider`, `field(record,
 name, edit=)`, `form(action)`, `button(label, action= | open= | go=)`,
-`menu`, `table(records, columns=, actions=)`, `cards(records, title=, …)`,
+`menu`, `table(records, columns=, actions=, go=, param=)`, `cards(records,
+title=, …, go=, param=)` (a row or a card opens its sheet, or with `go` a
+screen of the Quill's own, the record's id as `param`),
+`gallery(records, title=, subtitle=, badge=, stars=, rate=, actions=)` (files
+as picture tiles with five stars; a star runs `rate` with `stars=`),
 `lanes(records, field=, title=)`, `month(records, date=, title=)`. Every
 button runs a declared action, opens a record, or goes to a declared screen.
 
@@ -262,10 +270,13 @@ service = "sync"
 [requires]                         # a program a service needs that the server may not have
 runtimes = ["ffmpeg"]              # an id from the catalog's [runtimes]; the install fetches
                                    # a checked static build and puts it first on the services' PATH
+quills = ["media"]                 # other Quills it works with: installed first, from the catalog,
+                                   # and kept while this one is here
 ```
 
-A runtime is for a service only (a Quill without `[[services]]` is refused
-one), is named on the install sheet with its size before the yes, and is
+A runtime is for the services (and ffmpeg also gives every video file a
+thumbnail, so a Quill that only shows videos may require it without a
+service); it is named on the install sheet with its size before the yes, and is
 offered for removal with the last Quill that needs it. Never tell anybody to
 `apt install` something: name it in `[requires]` instead, and if the catalog
 has no entry for it yet, that is a pull request to Cloudmorrow/quill-catalog
@@ -368,13 +379,16 @@ and has every surface draw it hidden until asked for.
 
 | kit | needs | draws |
 | --- | --- | --- |
-| list | model, title; optional subtitle, tick (bool), fields (the sheet's), group and subgroup (link, enum or indexed string) | rows, a circle per row if tick; chips (phone, web) or a list and buttons (terminal) to pick the group and subgroup |
+| list | model, title; optional subtitle, tick (bool), fields (the sheet's), group and subgroup (link, enum or indexed string); projects: vault (a string: the vault its secrets are in), repo (url) and env_files (json: which .env file each environment came from) | rows, a circle per row if tick; chips (phone, web) or a list and buttons (terminal) to pick the group and subgroup; a list of `secret` has Import .env and Export .env; a list of projects has their environments on the sheet, and init, update, clone in the terminal and on the command line |
 | board | model, lane (in ordered_within: an enum, or a link to the records that are the lanes — in their order, and on a board with a group only those linking to it), title; optional group (link: chips), subtitle (a field, or a list of them, under a card's title), body (markdown), done (a lane value; for record lanes what the lane has: `{ outcome = "won" }`) | lanes; cards dragged between them |
 | detail / form | model; optional fields = [...] | one record's fields, editable |
-| calendar | model, starts, ends (indexed datetime/date), space (a link to a space datamodel); optional all_day (bool), colour (a field of the space), subtitle | every space's things at once: a month, a week, the day's list; the spaces and their people |
+| calendar | model, starts, ends (indexed datetime/date), space (a link to a space datamodel); optional all_day (bool), colour (a field of the space), subtitle, subscribed (a url field of the space: filled, the space comes from elsewhere — drawn, listed apart, and nothing put on it or changed on it) | every space's things at once: a month, a week, the day's list; the spaces and their people |
 | editor | model, title, body (markdown); optional path (a string like folder/sub/title: the folders) | a tree of folders and records beside a page of Markdown; pictures where the backend keeps attachments |
-| grid | a model with bytes beside its fields (the foundational `file`); group (link: the places, picked first), folder (string), kind (an enum with "folder"); optional size, modified, mime, group_subtitle, group_open and group_writes (fields of the group's model; group_open and group_writes are bools: false and the group is listed but not opened, or opened with nothing that writes) | the groups, then folders and tiles with pictures; put in, get, new folder, rename, move, delete |
+| sheet | model (the foundational `file`), title, cells (the text field a `.cell` file's text is in: one JSON object, `{"cells": {"A1": "Rent", "B4": "=SUM(B1:B3)"}}`), path, and where and suffix as an editor's (`where = { share = "my-files", within = "Documents" }`, `suffix = [".cell", ".xlsx"]`: an Excel file is read and written as the same text) | a spreadsheet over the .cell (and Excel) files in a folder of the drive: the sheets, then one as a grid with a formula bar; Excel's formulas (SUM, IF, ROUND, …), worked out the same on every surface; Open from anywhere on the cloud, Export as Excel, PDF or CSV (docs/CELLS.md) |
+| document | model (the foundational `file`), title, body (the text field a `.docs` file's text is in: one JSON object, `{"blocks": [{"kind": "heading", "level": 1, "runs": [{"text": "Hi"}]}]}`), path, and where and suffix as an editor's — suffix may be a list, `[".docs", ".docx"]`: a Word file is read and written as the same text | a page of words over the .docs (and Word) files in a folder of the drive: headings, paragraphs, lists, quotes, tables, bold/italic/underline/strike/links; the editor's list, a page with a bar of styles; Markdown in the terminal; Open from anywhere on the cloud, Export as Word, PDF or Markdown, import from Word (docs/DOCS.md) |
+| grid | a model with bytes beside its fields (the foundational `file`); group (link: the places, picked first), folder (string), kind (an enum with "folder"); optional size, modified, mime, deleted and deleted_from (a datetime and a string: when a record went to the Trash and where from — Restore instead of Rename and Move, and Delete for good), group_subtitle, group_open and group_writes (fields of the group's model; group_open and group_writes are bools: false and the group is listed but not opened, or opened with nothing that writes) | the groups, then folders and tiles with pictures; put in, get, new folder, rename, move, delete (to the Trash), restore |
 | thread | model (in a space), space (its link to the space), body; optional about (a field of the space), made_as; a team's: reply_to (a link of the model to itself: a reply, in a thread under its parent), pinned (a bool: kept at the top; `managed` in the datamodel lets the space's manager pin), reactions (a datamodel of the Quill's with a link to the model, an `emoji` string, authored: one per person per emoji per line, toggled), mentions = true (@name lights up and tells that person) | the spaces with unread counts, then a conversation: newest at the bottom, grouped by author and day, a box to write in; threads beside it, reactions under each line, pinned lines in the header |
+| timeline | model (a project: width, height, fps, tracks; optional crop, status, message, output), pieces (a datamodel with one link to the project: track, source, name, start, offset, length; optional volume, muted), media (where the material is: `{ share = "my-files", within = "Videos" }`); optional effects (a datamodel with one link to the pieces: kind, label, keyframes; optional strength), frames (an `[[apis]]` id that draws frames), export (an action on the project) | a video editor: material from the drive, video and audio tracks with pieces to move, trim and split, blurs that move by keyframes, a crop, export; live with sound on the web, real frames in the terminal (docs/TIMELINE.md) |
 
 A thread's `made_as` says what fields a space gets for how it is made — by
 scope, or `direct`: a shared space found-or-made between you and the person
@@ -386,6 +400,13 @@ public = { kind = "public" }
 shared = { kind = "private" }
 direct = { kind = "direct" }
 ```
+
+A list that binds `vault` is projects on your machines: `cm <quill> init
+[--path DIR]` makes a folder one and reads every `.env*` file into its
+vault (`.env.prod` is `prod`, `.env` is `local`; examples and files git
+tracks are left alone), `update [project]` pulls it and writes the files
+back from the vault, `clone <project> [DIR]` puts it on a new machine, and
+`secrets [import|export] [project] [-e ENV] [-f FILE]` moves one file or all.
 
 On the command line a thread is `cm <quill> list` (the spaces, with unread),
 `show <space>` and `say <space> "text"`; with the team's bindings also
