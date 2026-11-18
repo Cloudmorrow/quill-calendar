@@ -3,15 +3,16 @@
 The calendars, the events and how every surface draws them are declared in
 quill.toml. This is the code behind its actions, its hook and its one job,
 run as whoever presses, changes or holds: copying an event a week on, and
-calendars subscribed from elsewhere — a reader of iCalendar (RFC 5545)
-small enough to live here: the unfolding, the components, whole days and
-moments, the zones a feed carries with it, and recurrence.
+calendars subscribed from elsewhere — the settings screen that lists them,
+and a reader of iCalendar (RFC 5545) small enough to live here: the
+unfolding, the components, whole days and moments, the zones a feed
+carries with it, and recurrence.
 """
 
 import datetime as dt
 import re
 
-from cloudmorrow.quill import Invalid, Refused, action, error, go, hook, job, open, toast
+from cloudmorrow.quill import Invalid, Refused, action, error, go, hook, job, open, toast, ui, view
 
 CALENDAR = "calendar"
 EVENT = "event"
@@ -28,6 +29,11 @@ COLOURS = ("cyan", "violet", "green", "amber", "rose")
 BACK = dt.timedelta(days=365)
 AHEAD = dt.timedelta(days=2 * 365)
 MOST = 2000  # times one recurring event is drawn, at the very most
+# How long a feed gets to answer. A big calendar — years of a busy one — can
+# take well over the twenty seconds a fetch waits by itself; the gate caps
+# this at what the handler has (five minutes for subscribe and refresh, two
+# for the hourly job), so it is "as long as there is".
+FEED_WAIT = 300.0
 
 # -- the week after ------------------------------------------------------------------
 
@@ -94,7 +100,7 @@ def read_feed(ctx, url, today):
     if not url.lower().startswith("https://"):
         raise Trouble("a feed's address starts with https:// (or webcal://)")
     try:
-        answer = ctx.fetch(url, headers={"Accept": "text/calendar, */*;q=0.5"})
+        answer = ctx.fetch(url, headers={"Accept": "text/calendar, */*;q=0.5"}, timeout=FEED_WAIT)
     except (Refused, Invalid) as exc:
         raise Trouble(str(exc)) from None
     if not answer.ok:
@@ -167,7 +173,9 @@ def subscribe(ctx, url, name=""):
     calendar = ctx.records.create(CALENDAR, {"name": title, "colour": free_colour(ctx), URL: url}, scope="personal")
     count = fill(ctx, calendar, feed)
     note(ctx, calendar)
-    return [toast(f"{title}: {count} events, read again every hour"), go("month")]
+    # Pressed on the settings screen, which is drawn again with the new row;
+    # from anywhere else (the command line, an assistant) the same screen.
+    return [toast(f"{title}: {count} events, read again every hour"), go("settings")]
 
 
 @action("refresh")
@@ -185,18 +193,93 @@ def unsubscribe(ctx, calendar):
     if not calendar.get(URL):
         return error(f"{calendar['name']} is not subscribed from anywhere.")
     ctx.records.delete(CALENDAR, calendar.id)
-    return [toast(f"{calendar['name']} is gone"), go("month")]
+    # Back to the subscriptions — the settings screen drawn again when the X
+    # there was pressed, and from the calendar's sheet the way to the rest.
+    return [toast(f"{calendar['name']} is gone"), go("settings")]
+
+
+def subscriptions(ctx):
+    """The person's own calendars read from elsewhere, the one longest unread first."""
+    me = ctx.user.username
+    mine = [c for c in ctx.records.list(CALENDAR) if c.get(URL) and c.owner == me]
+    return sorted(mine, key=lambda c: str(c.get(REFRESHED) or ""))
 
 
 @job
 def refresh_all(ctx):
-    """Every hour, as each person: their own subscriptions, read again."""
-    me = ctx.user.username
-    for calendar in ctx.records.list(CALENDAR):
-        if calendar.get(URL) and calendar.owner == me:
-            count, trouble = refresh_calendar(ctx, calendar)
-            if trouble:
-                ctx.log(f"{calendar['name']}: {trouble}")
+    """Every hour, as each person: their own subscriptions, read again. The
+    one longest unread goes first, so a feed that is slow to answer never
+    keeps the same other one waiting hour after hour."""
+    for calendar in subscriptions(ctx):
+        count, trouble = refresh_calendar(ctx, calendar)
+        if trouble:
+            ctx.log(f"{calendar['name']}: {trouble}")
+
+
+# -- settings: the subscriptions -------------------------------------------------------
+
+
+def ago(now, stamp):
+    """How long ago *stamp* (ISO) was, in words: just now, 12 minutes ago, 3 hours ago, 2 days ago."""
+    try:
+        then = dt.datetime.fromisoformat(str(stamp))
+    except (TypeError, ValueError):
+        return ""
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=now.tzinfo)
+    gone = max(dt.timedelta(), now - then)
+    minutes = int(gone.total_seconds() // 60)
+    if minutes < 1:
+        return "just now"
+    if minutes < 60:
+        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    days = hours // 24
+    return f"{days} day{'s' if days != 1 else ''} ago"
+
+
+def said_of(ctx, calendar, now):
+    """The line under a subscription's name: where it is read from, how many
+    events are on it, when it was last read — or what went wrong."""
+    count = len(ctx.records.list(EVENT, calendar=calendar.id))
+    events = f"{count} event{'s' if count != 1 else ''}"
+    trouble = str(calendar.get(TROUBLE) or "")
+    if trouble:
+        return f"From {host_of(str(calendar.get(URL) or ''))} · could not be read: {trouble}"
+    read = ago(now, calendar.get(REFRESHED))
+    return f"From {host_of(str(calendar.get(URL) or ''))} · {events}" + (f" · read {read}" if read else "")
+
+
+@view("settings")
+def settings(ctx):
+    """Behind the gear: the calendars subscribed from elsewhere, each saying
+    where it is read from and when it last was, with an X that unsubscribes;
+    and under them the form that subscribes to another."""
+    now = ctx.now()
+    mine = sorted(subscriptions(ctx), key=lambda c: str(c["name"]).lower())
+    rows = []
+    for calendar in mine:
+        record = calendar.to_dict()
+        record["fields"] = {**record.get("fields", {}), "said": said_of(ctx, calendar, now)}
+        rows.append(record)
+    return ui.stack(
+        ui.text("Subscribed calendars", style="subtitle"),
+        ui.text(
+            "Calendars published elsewhere, read into one of your own: read again every hour, as you, "
+            "and read-only here. Open one for its sheet, where Refresh now is; the X unsubscribes.",
+            style="muted",
+        ),
+        ui.rows(rows, title="name", subtitle="said", close="unsubscribe", empty="No subscribed calendars yet."),
+        ui.text("Subscribe to a calendar", style="subtitle"),
+        ui.text(
+            "The address of an .ics feed, as Google Calendar, Outlook and the rest hand out (webcal:// is fine). "
+            "A big calendar takes a while to read the first time.",
+            style="muted",
+        ),
+        ui.form("subscribe", submit="Subscribe"),
+    )
 
 
 @hook
