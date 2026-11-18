@@ -358,41 +358,31 @@ def test_copying_from_a_subscribed_calendar_lands_on_your_own(q):
     assert copy["starts_at"] == str(NEXT + dt.timedelta(days=7)) and not copy.get("calendar.uid")
 
 
-# -- the settings screen, behind the gear ----------------------------------------------
+# -- behind the gear ------------------------------------------------------------------------
+def test_the_list_behind_the_gear_is_the_kits_with_subscribe_as_its_row(q):
+    """The calendars — yours, subscribed, everybody's — are the kit's own list
+    behind the gear, so the Quill has no settings screen of its own; the
+    screen names the action the row under the subscribed ones presses, and
+    that action is on no bar."""
+    assert [s["id"] for s in q.manifest.screens] == ["month"]
+    (month,) = q.manifest.screens
+    assert month["subscribed"] == "calendar.url" and month["subscribe"] == "subscribe"
+    actions = {a["id"]: a for a in q.manifest.actions}
+    assert actions["subscribe"]["settings"] is True and not actions["subscribe"].get("on")
+
+
 def goes_to(result):
     return next((e["screen"] for e in result.effects if e["effect"] == "go"), "")
 
 
-def test_the_subscriptions_are_behind_the_gear_each_saying_where_from_and_when_read(q):
-    """The settings screen lists the person's own subscribed calendars — where
-    each is read from, how many events, when it was last read — with an X that
-    unsubscribes, and the form that subscribes to another under them."""
-    empty = q.view("settings")
-    assert empty.find("rows")[0]["empty"] == "No subscribed calendars yet."
-    assert [f["action"] for f in empty.find("form")] == ["subscribe"]
-    club(q, MATCH, TRAINING)
-    assert q.act("subscribe", url=FEED).ok
-    (rows,) = q.view("settings").find("rows")
-    assert rows["close"] == "unsubscribe" and rows["title"] == "name"
-    (row,) = rows["records"]
-    assert row["fields"]["name"] == "Bram's club"
-    assert row["fields"][rows["subtitle"]] == "From calendar.example · 2 events · read just now"
-    # Trouble is said instead, and the feed's own calendars only: not Sam's.
-    q.fetch.add(FEED, text="gone", status=500)
-    q.act("refresh", subscribed(q))
-    (row,) = q.view("settings").find("rows")[0]["records"]
-    assert row["fields"]["said"].startswith("From calendar.example · could not be read: calendar.example answered 500")
-    sam = q.as_user("sam")
-    assert sam.view("settings").find("rows")[0]["empty"]
-    assert "Subscribe to a calendar" in q.view("settings").text()
-
-
-def test_subscribing_and_unsubscribing_lead_back_to_the_subscriptions(q):
-    """Pressed on the settings screen, both draw it again (a go to the screen
-    one is on); from a calendar's sheet, Unsubscribe lands where the rest are."""
+def test_subscribing_stays_on_the_list_and_unsubscribing_lands_on_the_month(q):
+    """Subscribe is pressed on the list, which draws itself again: a toast and
+    nothing more. Unsubscribe is pressed on the calendar's sheet, which goes
+    with it: back to the month."""
     club(q, MATCH)
-    assert goes_to(q.act("subscribe", url=FEED)) == "settings"
-    assert goes_to(q.act("unsubscribe", subscribed(q))) == "settings"
+    subscribed_to = q.act("subscribe", url=FEED)
+    assert subscribed_to.ok and goes_to(subscribed_to) == ""
+    assert goes_to(q.act("unsubscribe", subscribed(q))) == "month"
 
 
 def test_a_feed_is_given_time_to_answer(q):
@@ -419,13 +409,3 @@ def test_the_hourly_job_reads_the_calendar_longest_unread_first(q):
     before = len(q.fetch.sent)
     q.run_job("refresh")
     assert [s["url"] for s in q.fetch.sent[before:]] == [first["calendar.url"], second["calendar.url"]]
-
-
-def test_how_long_ago_is_said_in_words():
-    now = dt.datetime(2026, 11, 18, 12, 0, tzinfo=dt.UTC)
-    assert code.ago(now, "2026-11-18T11:59:40+00:00") == "just now"
-    assert code.ago(now, "2026-11-18T11:48:00+00:00") == "12 minutes ago"
-    assert code.ago(now, "2026-11-18T09:00:00+00:00") == "3 hours ago"
-    assert code.ago(now, "2026-11-16T09:00:00+00:00") == "2 days ago"
-    assert code.ago(now, "2026-11-18T10:59:00") == "1 hour ago"  # naive: as the clock here
-    assert code.ago(now, None) == "" and code.ago(now, "soon") == ""

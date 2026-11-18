@@ -1,7 +1,7 @@
 [quill]
 id = "calendar"
 name = "Calendar"
-version = "1.3.0"
+version = "1.4.0"
 summary = "Your own calendar, the ones you share, one for everybody, and the ones you subscribe to from elsewhere."
 category = "productivity"
 icon = "calendar"
@@ -17,7 +17,7 @@ features = [
   "All-day events that run over as many days as they need",
   "Copy an event to the week after, at the same time on the same calendar",
   "Subscribe to a calendar published elsewhere by its address (an .ics link, as Google and the rest give out): drawn with yours, refreshed every hour, read-only",
-  "Your subscriptions behind the gear: where each is read from, when it last was, and the X that takes it away",
+  "Behind the gear, your calendars: yours, the subscribed ones and everybody's, the rows that make one and subscribe to one, and a tick on each to take it off the month for now",
 ]
 
 [uses]
@@ -56,17 +56,7 @@ starts = "starts_at"
 ends = "ends_at"
 all_day = "all_day"
 subscribed = "calendar.url"   # a calendar with an address comes from elsewhere: drawn, listed apart, read-only
-
-# Behind the gear beside the title: the calendars subscribed from elsewhere
-# — where each is read from, when it last was, an X to unsubscribe — and the
-# form that subscribes to another. Never a tab, never a button on the month.
-[[screens]]
-id = "settings"
-icon = "gear"
-label = "Settings"
-view = "settings"
-model = "calendar"
-settings = true
+subscribe = "subscribe"       # the action that brings one in: the row under the subscribed ones, behind the gear
 
 # Everybody has exactly one calendar of their own, made the first time they
 # look, named after them. It is personal: nobody else sees it.
@@ -101,7 +91,7 @@ description = "A copy of the event seven days later, on the same calendar, at th
 [[actions]]
 id = "subscribe"
 label = "Subscribe to a calendar"
-settings = true               # pressed from the settings screen alone: no chip under the month's title
+settings = true               # on no bar and no chip: the row behind the gear presses it (and cm, and your assistant)
 timeout = "5m"                # a big calendar takes a while to fetch and read; the most an action may have
 busy = "Importing calendar"   # said on the button, with a spinner, while it runs
 description = "A calendar published elsewhere, by its address: an .ics link, as Google Calendar, Outlook and the rest give out. It is drawn with yours in a colour of its own, read again every hour, and read-only: what is on it is theirs to change."

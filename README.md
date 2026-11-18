@@ -4,19 +4,21 @@ A Quill for [Cloudmorrow](https://github.com/Cloudmorrow/cloudmorrow): your own
 calendar, the ones you share with the people you live or work with, and one
 the whole server shares.
 
-- **Yours.** Everybody has exactly one, made the first time they look and
-  named after them. Nobody else sees it.
-- **Shared.** Anybody can make one and put people in it. There is no
+- **Yours.** Everybody has exactly one of their own, made the first time
+  they look and named after them, that nobody else sees — and the ones they
+  make to share: anybody can make one and put people in it. There is no
   invitation to accept: they are added, they are told, and they can leave.
-- **Everybody's.** One calendar the whole server sees and writes in, and
-  nobody can leave.
 - **Subscribed.** A calendar somebody else publishes — the club's fixtures,
   the bins, the public holidays — read into a calendar of your own from its
   address, every hour, and read-only.
+- **Everybody's.** One calendar the whole server sees and writes in, and
+  nobody can leave; and the calendars other people shared with you.
 
 Every calendar you can see is drawn at once, each event in the colour of
 the calendar it is on — a calendar you have to switch between is one that
-lets you double-book yourself.
+lets you double-book yourself. The gear beside the title is the list of
+them, in those three groups, and a tick on each takes a calendar off the
+month for now, on the device you are holding, until you tick it again.
 
 Times are the times on the wall. "The dentist at ten" is stored as
 `2026-10-01T10:00`, with no zone, and is at ten on every screen in October
@@ -44,16 +46,14 @@ that pinged everybody for every appointment is one nobody reads.
 
 **A calendar from elsewhere** is subscribed to by its address: the `.ics`
 link Google Calendar, Outlook, a club's website and the rest hand out (a
-`webcal://` one is fine too). Your subscriptions live behind the gear at
-the right of the calendar's title — *Settings* on the web and the phone,
-`,` in the terminal: every calendar you subscribe to, each saying where it
-is read from, how many events are on it and when it was last read (or what
-went wrong), with an X that unsubscribes; and under them *Subscribe to a
-calendar*, an address and a name if you like. Press it and the button says
-*Importing calendar* with a spinner while the feed is fetched and read — a
-big calendar takes a while, and it may take up to five minutes — then the
-new calendar is in the list. It is also `cm calendar subscribe url=…` on
-the command line, and a tool for your assistant. Subscribing reads the
+`webcal://` one is fine too). Behind the gear at the right of the
+calendar's title, under *Subscribed*, is the row *Subscribe to a calendar*
+(`s` in the terminal): an address, and a name if you like. Press it and
+the button says *Importing calendar* with a spinner while the feed is
+fetched and read — a big calendar takes a while, and it may take up to
+five minutes — then the new calendar is in the list, saying where it is
+read from. It is also `cm calendar subscribe url=…` on the command line,
+and a tool for your assistant. Subscribing reads the
 feed once, makes a calendar of your own named as the feed names itself (or
 as you say), in a colour of its own, and puts the feed's events on it. From
 then on it is read again every hour, as you, the one longest unread first,
@@ -65,8 +65,8 @@ next week* on one of its events copies onto your own calendar. The sheet
 of a subscribed calendar says where it is read from (change the address
 and the new feed is read; clear it and the feed's events go, the calendar
 stays), when it was last read, and what went wrong if anything did — then
-what was read before is kept. *Unsubscribe*, the X on the settings screen
-or the button on the sheet, takes it away, events and all.
+what was read before is kept. *Unsubscribe*, on that sheet, takes it
+away, events and all.
 
 What is read: every event a year back and two years on, whole days and
 moments alike, recurring ones at every time they happen (daily, weekly,
@@ -82,20 +82,26 @@ On a phone, a month with a dot per event and the day you tap written out
 under it; the add row takes "10:00 Dentist" for a time, or just a title for
 a whole day, into the calendar picked beside it. On a computer, a week of
 hours with whole-day things along the top, or the month with the events
-written in its cells; the switch is beside the month's name. The people
-icon is the list of calendars — yours, shared, everybody's — where one is
-made (its name, who can see it, who is in it), and a calendar's own sheet
-is where it is renamed, recoloured, shared, left and deleted.
+written in its cells; the switch is beside the month's name. The gear is
+the list of calendars — yours, subscribed, everybody's — with a tick on
+each to take it off the month for now, the row under yours that makes one
+(its name, who can see it, who is in it) and the row under the subscribed
+ones that subscribes to another; a calendar's own sheet, opened from the
+list, is where it is renamed, recoloured, shared, left, deleted and
+unsubscribed.
 
 #### In the terminal app
 
-The **Calendar** card: the calendars on the left, the month beside them
-with a coloured dot per event, the day you are standing on underneath. `n`
-makes an event on that day, `e` (or `enter`) opens the one under the
-cursor on its record sheet, `del` removes it, `c` makes a calendar, `p` (or
-`enter` on a calendar) is who is in it — add, take out, leave — `r` renames
-and recolours it, `t` is today, and `[` and `]` are the months. The list on
-the left is not a filter: it picks which calendar a new event goes in.
+The **Calendar** card: the calendars on the left — yours, subscribed,
+everybody's, a tick in front of each — the month beside them with a
+coloured dot per event, the day you are standing on underneath. `n` makes
+an event on that day, `e` (or `enter`) opens the one under the cursor on
+its record sheet, `del` removes it, `c` makes a calendar, `s` subscribes to
+one, `v` takes the calendar under the cursor off the month for now (and
+puts it back), `p` (or `enter` on a calendar) is who is in it — add, take
+out, leave — `r` renames and recolours it, `t` is today, and `[` and `]`
+are the months. The list on the left picks which calendar a new event
+goes in.
 
 #### On the command line
 
@@ -123,11 +129,11 @@ that had the built-in calendar got the Quill at boot, with its calendars
 | | |
 | --- | --- |
 | Datamodels | uses the foundational `calendar` (a space: personal, shared or public) and `event` (in a calendar), domain *Calendars*; extends `calendar` with `calendar.url` (the feed a subscribed one is read from), `calendar.refreshed` and `calendar.trouble`, and `event` with `calendar.uid` (what the feed calls it) |
-| Screens | one calendar: a month and the day's list on the phone, a week and a month on the web app, a month and the day in the terminal, `cm calendar list --from --to` and `add`, and to your assistant; a subscribed calendar is listed apart and read-only on every one of them. Behind the gear, Settings: your subscriptions, where each is read from and when it last was, the X that unsubscribes, and the form that subscribes to another |
+| Screens | one calendar: a month and the day's list on the phone, a week and a month on the web app, a month and the day in the terminal, `cm calendar list --from --to` and `add`, and to your assistant; a subscribed calendar is listed apart and read-only on every one of them. Behind the gear, the calendars: yours, subscribed and everybody's, the rows that make one and subscribe to one, and a tick each to take one off the month for now |
 | Jobs | `refresh`: every hour, as each person, their subscribed calendars read again, the one longest unread first |
 | Hooks | the address on a calendar changed: the new feed is read, or, cleared, the feed's events taken off |
 | Datasets | `yours`: a personal calendar for each person, named after them; `everybody`: one public calendar for the server |
-| Actions | **Copy to next week** on an event; **Subscribe to a calendar** (an address, and a name if you like) on the settings screen, saying *Importing calendar* while it runs, with up to five minutes to fetch and read a feed; **Refresh now** and **Unsubscribe** on a subscribed calendar — on the sheets, as `cm calendar …`, and to your assistant |
+| Actions | **Copy to next week** on an event; **Subscribe to a calendar** (an address, and a name if you like), the row under the subscribed calendars behind the gear, saying *Importing calendar* while it runs, with up to five minutes to fetch and read a feed; **Refresh now** and **Unsubscribe** on a subscribed calendar — on the sheets, as `cm calendar …`, and to your assistant |
 | Reaches | any address on the internet, to read the feeds you subscribe to; never a private one |
 | Services, webhooks, APIs | none |
 
